@@ -55,7 +55,14 @@ free.
 
 ## Running
 
+Clone both repositories **side by side**; the smoke driver and the controller
+suite both resolve the sibling by relative path.
+
 ```bash
+git clone https://github.com/hossainpazooki/agentic-self-instruct.git
+git clone https://github.com/hossainpazooki/asi-controller.git
+
+cd agentic-self-instruct
 pytest                                   # this repo
 pytest ../asi-controller/tests           # the controller
 python -m runner.smoke --documents 20    # three-arm smoke
