@@ -1,0 +1,12 @@
+[project]
+name = "agentic-self-instruct"
+version = "0.1.0"
+description = "Reconstruction of Agentic Self-Instruct (arXiv:2606.25996v2), re-targeted to verifiable code"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
