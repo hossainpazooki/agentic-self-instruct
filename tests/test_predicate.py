@@ -12,7 +12,13 @@ from shared import checks
 from shared.evalresult import blocking_check, measurement
 
 
-def make_results(weak_avg, weak_max, weak_min, strong_avg, qv=True, final_qv=None):
+def make_results(
+    weak_avg, weak_max, weak_min, strong_avg, qv=True, final_qv=None, strong_min=None
+):
+    # strong_min defaults to strong_avg: the tests that do not care about the
+    # strong-side zero rule should not have to opt out of it.
+    if strong_min is None:
+        strong_min = strong_avg
     results = [
         blocking_check(checks.CHALLENGER_WELLFORMED, True),
         blocking_check(checks.QUALITY_VERIFIER, qv),
@@ -20,6 +26,7 @@ def make_results(weak_avg, weak_max, weak_min, strong_avg, qv=True, final_qv=Non
         measurement(checks.WEAK_MAX, weak_max, 0.75),
         measurement(checks.WEAK_MIN, weak_min, 0.0),
         measurement(checks.STRONG_AVG, strong_avg, 0.60),
+        measurement(checks.STRONG_MIN, strong_min, 0.0),
         measurement(checks.SOLVER_GAP, strong_avg - weak_avg, 0.20),
     ]
     if final_qv is not None:
@@ -92,7 +99,11 @@ def test_short_circuit_leaves_strong_measurements_missing_and_rejects():
     ]
     verdict = explain(results, "deployed_c1")
     assert verdict.accepted is False
-    assert set(verdict.missing_measurements) == {checks.STRONG_AVG, checks.SOLVER_GAP}
+    assert set(verdict.missing_measurements) == {
+        checks.STRONG_AVG,
+        checks.STRONG_MIN,
+        checks.SOLVER_GAP,
+    }
 
 
 # --- the two variants -------------------------------------------------------
@@ -121,6 +132,28 @@ def test_prose_rejects_a_weak_score_the_deployed_form_allows():
 
 def test_deployed_form_enforces_no_zeros():
     assert accept(make_results(0.40, 0.60, 0.00, 0.85), "deployed_c1") is False
+
+
+def test_deployed_form_rejects_an_individual_strong_zero():
+    """"No individual strong = 0%? (suspicious)" from the deployed prompt.
+
+    strong_avg alone cannot see this: two rollouts at 1.0 and one at 0.0
+    average to 0.667, which clears the >= 0.60 bound comfortably.
+    """
+    results = make_results(0.20, 0.30, 0.10, 0.667, strong_min=0.0)
+    assert accept(results, "deployed_c1") is False
+    assert explain(results, "deployed_c1").failed_conditions == ["strong_solver_min=0.0000 > 0.0"]
+
+
+def test_the_prose_variant_has_no_zero_rules_at_all():
+    """Section 3.1's prose states three conditions and says nothing about zeros.
+
+    Keeping the asymmetry is the point: the variants must differ where the
+    sources differ, not be quietly harmonised.
+    """
+    results = make_results(0.20, 0.30, 0.00, 0.667, strong_min=0.0)
+    assert accept(results, "prose_s31") is True
+    assert accept(results, "deployed_c1") is False
     assert accept(make_results(0.40, 0.60, 0.10, 0.85), "deployed_c1") is True
 
 

@@ -17,6 +17,7 @@ WEAK_AVG = "weak_solver_avg"
 WEAK_MAX = "weak_solver_max"
 WEAK_MIN = "weak_solver_min"
 STRONG_AVG = "strong_solver_avg"
+STRONG_MIN = "strong_solver_min"
 SOLVER_GAP = "solver_gap"
 
 # --- emitted by the controller (trusted, outside the edit surface) ---
@@ -36,6 +37,7 @@ HARNESS_CHECKS = frozenset(
         WEAK_MAX,
         WEAK_MIN,
         STRONG_AVG,
+        STRONG_MIN,
         SOLVER_GAP,
     }
 )

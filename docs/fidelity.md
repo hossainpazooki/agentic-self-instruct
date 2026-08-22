@@ -17,12 +17,22 @@ reproduce against.
 
 **No official code release.** `facebookresearch/RAM/projects/autodata` contains
 `README.md` and seven images; no `.py` file anywhere in the tree; last commit
-2026-06-25. Checked 2026-08-20.
+touching that path 2026-06-25. Checked 2026-08-20 and **re-checked 2026-08-22**:
+no commits to the repository since 2026-08-19, and the README is byte-for-byte
+the same object (28,412 bytes, blob `0a7f5467`). An unaffiliated third-party
+reconstruction exists — see the cross-check below — but that is not a release
+and does not trigger the stop condition.
 
-**v2 vs v3.** A v3 exists (4 Jul 2026). A whitespace-normalized diff of the two
-PDFs is 28 lines: one added related-work citation (DataEnvGym, Khan et al.) and
-bibliography reordering. No method, threshold, or appendix change. Building
-against the pinned v2 is safe.
+**v2 vs v3, and which is current.** A v3 exists (4 Jul 2026). A
+whitespace-normalized diff of the two PDFs is 28 lines: one added related-work
+citation (DataEnvGym, Khan et al.) and bibliography reordering. No method,
+threshold, or appendix change. Building against the pinned v2 is safe.
+
+Re-checked 2026-08-22: **v3 is still the latest** — the submission history lists
+v1 (24 Jun), v2 (25 Jun), v3 (4 Jul) and nothing else; `/abs/...v4` and `v5`
+both 404. The locally pinned v3 PDF is byte-identical to the one served today
+(md5 `69e0fb0a2299a5fd9d8812dd703969d2`), so this reconstruction is built
+against the current version of the paper.
 
 **The RAM README is a stale May-2026 snapshot.** It reports Kimi-K2.5, 2,117
 accepted pairs, and meta-optimization 12.8% → 42.4% over 126/233 accepted
@@ -40,21 +50,88 @@ the three-arm study is about.
 | Source | Predicate |
 |---|---|
 | §3.1 prose | strong_avg ≥ 0.65, weak_avg < 0.5, gap ≥ 20 pp |
-| **App. C.1 Fig. 7** (deployed main-agent prompt) | weak_avg ≤ 65%, max_weak ≤ 75%, **no zeros**, strong_avg ≥ 60% **AND < 95%**, gap ≥ 20% |
+| **App. C.1 Fig. 7** (deployed main-agent prompt) | weak_avg ≤ 65%, max_weak ≤ 75%, **no zeros**, strong_avg ≥ 60% **AND < 95%**, **no individual strong = 0%**, gap ≥ 20% |
 | **§4 Setup** | as Fig. 7 (without "no zeros") |
 | **RAM README** (verbatim prompt) | as Fig. 7 |
 
 Three sources to one, and the majority form is the one that actually ran. The
 difference is structural, not numeric: the deployed form adds a
-best-of-attempts cap, a no-zeros rule, and an **upper bound on the strong
-solver** (reject what the strong solver finds trivial) that the prose form
-lacks entirely.
+best-of-attempts cap, zero rules on **both** solvers, and an **upper bound on
+the strong solver** (reject what the strong solver finds trivial) that the
+prose form lacks entirely.
 
 **Decision (2026-08-20): implement both**, selectable by config.
 `deployed_c1` is the default and decides; `prose_s31` is scored as a shadow
 verdict over the same `EvalResult` list and logged. The shadow costs nothing
 because the predicate re-derives from `score` rather than trusting each check's
 own `passed` bit. Both are in `repo/acceptance/predicate.py`.
+
+### What "no zeros" means, and a condition initially missed (2026-08-22)
+
+The weak block's phrasing is terse — `(weak_avg <= 65%, max_weak <= 75%, no
+zeros)` — and admits two readings: reject if **any** attempt scored zero, or
+reject only if **all** did. They are not close in effect. Under the loose
+reading a candidate with rollouts `[0.0, 0.6, 0.7]` is accepted; under the
+strict one it is rejected.
+
+The deployed prompt settles it elsewhere. Its strong-side checklist spells the
+same rule out in full:
+
+> - No individual strong = 0%? (suspicious)
+
+"No individual" is the strict, per-attempt reading, so the weak block's "no
+zeros" is read the same way. §6's separate remark about "avoiding all-zero weak
+rollouts" is **not** this criterion: it describes an emergent behaviour of the
+legal-domain loop, where the concern is GRPO advantage collapsing when a whole
+group scores zero. Different claim, different section, different domain.
+
+Reading that line also surfaced a condition this reconstruction had **omitted**:
+the strong-side zero check itself. `strong_avg` cannot see it — two rollouts at
+1.0 and one at 0.0 average to 0.667 and clear the ≥ 0.60 bound comfortably.
+Fixed by emitting `strong_solver_min` from the loop and adding
+`strong_solver_min > 0` to `deployed_c1` only; `prose_s31` states three
+conditions and no zero rule, and that asymmetry is kept rather than harmonised.
+
+Two honesty notes on the fix:
+
+* The rule **never fires under the fake backend**. Instrumenting the 20-document
+  smoke gives 8 strong dispatches with `strong_solver_min ∈ {0.667, 0.8, 1.0}`
+  and no zeros, so the accepted counts and the matched-N digest are unchanged
+  (`35b186ecbfce` before and after). The smoke is therefore no evidence that
+  this condition works; `test_deployed_form_rejects_an_individual_strong_zero`
+  is.
+* The looser "not all zero" reading remains defensible and is what an
+  independent third-party reconstruction chose (see below). If a real run
+  rejects candidates that look discriminative, this is the first line to revisit.
+
+### Cross-check against an independent reconstruction
+
+`JAE-HUN-CHO/autodata-agentic-self-instruct` (created 2026-06-26, last pushed
+2026-06-29, built against **v1**) is an unaffiliated third-party
+reconstruction — not an author release, so the "stop if code exists" condition
+does not trigger. Checked 2026-08-22 because agreement or disagreement with it
+is evidence either way.
+
+It corroborates the central finding. Its `AcceptanceCriteria` docstring records
+the same contradiction independently:
+
+> Exact thresholds from Sec 3.1 'Criteria'. (strong_avg_min defaults to App
+> C.1's 0.60; set to 0.65 to match the Sec 3.1 prose.)
+
+and its defaults — `weak_avg_max=0.65`, `weak_attempt_max=0.75`,
+`strong_avg_min=0.60`, `strong_avg_max=0.95`, `gap_min=0.20` — are exactly this
+repository's `deployed_c1`. Two reconstructions reached the deployed form
+independently.
+
+It diverges in two places, both recorded rather than reconciled:
+
+| | this repo | third-party |
+|---|---|---|
+| weak zero rule | `min > 0` (per attempt) | `all(s == 0)` (all attempts) |
+| strong zero rule | `min > 0` | absent |
+
+The evidence above favours the per-attempt reading, which is why it stands
+here. It is an interpretation, not a certainty.
 
 ### Consequence found empirically: the upper bound fights execution-based scoring
 
@@ -298,3 +375,6 @@ synthetic smoke says nothing about prompt quality.
 5. Whether `solver_prompts_editable` stays true (currently true, so the §6 hack
    is reproducible).
 6. Whether mutation ≥ 0.70 survives contact with real corpus statistics.
+7. Whether "no zeros" is per-attempt (implemented) or all-attempts (the
+   third-party reading). Cannot fire under the fake backend, so this stays open
+   until a real run.

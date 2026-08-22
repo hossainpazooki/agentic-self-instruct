@@ -243,7 +243,17 @@ class Orchestrator:
             )
         record.strong_attempts = strong_attempts
         record.harness_results.append(strong_check)
-        record.harness_results.extend(aggregate(strong_attempts, checks.STRONG_AVG, 0.60))
+        record.harness_results.extend(
+            aggregate(
+                strong_attempts,
+                checks.STRONG_AVG,
+                0.60,
+                # The deployed prompt has no max_strong bound, but it does ask
+                # "No individual strong = 0%? (suspicious)", so the minimum is
+                # measured while the maximum is not.
+                min_check=checks.STRONG_MIN,
+            )
+        )
 
         weak_avg = _mean(weak_attempts)
         strong_avg = _mean(strong_attempts)

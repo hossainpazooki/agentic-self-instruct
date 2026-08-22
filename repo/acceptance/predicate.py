@@ -74,11 +74,20 @@ VARIANTS: dict[PredicateVariant, tuple[Condition, ...]] = {
     "deployed_c1": (
         Condition(check=checks.WEAK_AVG, op="<=", bound=0.65),
         Condition(check=checks.WEAK_MAX, op="<=", bound=0.75),
-        # "no zeros": a weak rollout scoring 0 signals a broken or unanswerable
-        # problem rather than a discriminative one.
+        # "no zeros" -- read as PER ATTEMPT, not "not all attempts". The
+        # deployed prompt's strong-side twin spells the same rule out as "No
+        # individual strong = 0%?", which settles the ambiguity in the weak
+        # block's terser phrasing. Section 6's separate remark about "avoiding
+        # all-zero weak rollouts" describes an emergent behaviour of the legal
+        # loop, not this criterion. The looser reading is a real alternative:
+        # see docs/fidelity.md.
         Condition(check=checks.WEAK_MIN, op=">", bound=0.0),
         Condition(check=checks.STRONG_AVG, op=">=", bound=0.60),
         Condition(check=checks.STRONG_AVG, op="<", bound=0.95),
+        # "No individual strong = 0%? (suspicious)" -- the strong-side twin of
+        # the weak "no zeros" rule. A strong rollout at zero usually means the
+        # problem is malformed rather than hard.
+        Condition(check=checks.STRONG_MIN, op=">", bound=0.0),
         Condition(check=checks.SOLVER_GAP, op=">=", bound=0.20),
     ),
     "prose_s31": (
