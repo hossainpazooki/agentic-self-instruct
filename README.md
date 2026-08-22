@@ -68,5 +68,8 @@ pytest ../asi-controller/tests           # the controller
 python -m runner.smoke --documents 20    # three-arm smoke
 ```
 
+The controller store is append-only, so a rerun needs a fresh
+`--output <dir>`; the driver refuses a populated one up front.
+
 The smoke runs against a deterministic fake backend: this host has no discrete
 GPU. A green smoke shows the wiring holds, and says nothing about data quality.

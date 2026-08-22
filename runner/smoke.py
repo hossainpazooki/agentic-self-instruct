@@ -52,6 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
+    # The controller store is append-only and refuses to rewrite a candidate, so a
+    # rerun into a populated directory would fail mid-arm with a traceback. Refuse
+    # up front instead: a smoke is a fresh run or it is not a smoke.
+    existing = sorted(p.name for p in args.output.glob("controller_arm*.jsonl"))
+    if existing:
+        print(
+            f"refusing to run: {args.output} already holds {', '.join(existing)}; "
+            "pass --output <empty dir> (the store is append-only and never rewrites)"
+        )
+        return 2
     run_id = f"smoke-{args.seed}"
     created_at = datetime.now(timezone.utc).isoformat()
 
@@ -113,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
                 f"harness_accepted={bucket['harness_accepted']} "
                 f"controller_accepted={bucket['controller_accepted']} "
                 f"got_away={bucket['got_away']} rate={rate_text}"
+            )
+            shadow_rate = bucket["shadow_got_away_rate"]
+            shadow_text = "n/a" if shadow_rate is None else f"{shadow_rate:.3f}"
+            print(
+                f"      shadow (prose_s31): harness_accepted={bucket['shadow_harness_accepted']} "
+                f"got_away={bucket['shadow_got_away']} rate={shadow_text}"
             )
 
     (args.output / "got_away_summary.json").write_text(
