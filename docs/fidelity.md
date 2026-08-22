@@ -318,6 +318,45 @@ training example with a contested reference answer is unusable.
 
 ---
 
+### Two reporting defects found on the smoke log (2026-08-22), both fixed
+
+Both were found by recomputing from `controller_arm*.jsonl` rather than from
+the printed summary. Neither changed a decision; both changed what the log
+*said* about the decisions.
+
+**1. Reason precedence hid the substantive verdict.** The controller's
+`explain()` returned early in the order blocked -> missing -> unusable ->
+threshold, so a candidate failing both legs was labelled `unusable`. Every such
+row in the smoke -- 12/72 in arms 1-2, 9/33 in arm 3 -- had *also* failed
+differential fuzz on threshold (scores 0.515-0.96, five disagreements each).
+They are the fake's injected `wrong_ref` candidates (15% of the flaw mix), caught
+twice over, and the log reported them as "could not measure". The true
+unmeasurable rate on the smoke is **0%**. Now both legs are always reported and
+`threshold` is the primary reason whenever a usable check failed.
+
+**2. The got-away summary computed the primary variant only.** The shadow
+verdict is scored over the same `EvalResult` list, so its got-away rate is
+free -- and it is the one that fired:
+
+| variant | harness accepted | got away | rate |
+|---|---|---|---|
+| `deployed_c1` (primary) | 6 | 0 | 0.000 |
+| `prose_s31` (shadow) | 12 | **1** | **0.083** |
+
+The escapee is `synthetic::0000::normalise_whitespace:r3`: weak 0.2 / strong
+1.0 / gap 0.8 -- maximally discriminative to the harness -- with a **wrong
+reference solution** (fuzz: 5 disagreements with the frozen solver; fails its
+own visible test 3). The harness never inspects `reference_solution`, by
+construction, so it cannot see this; it is exactly the threat the controller
+exists for. `deployed_c1` rejected the same candidate only because
+`strong_avg = 1.0 >= 0.95` -- the saturation bound flagged above as fighting
+execution-based scoring acted, here, as an accidental controller. That is a
+data point **for** keeping the bound (open decision 2), not against it.
+
+Both rates remain properties of the fake's flaw mix. What the smoke now shows
+is that the audit can fire on real log rows, not only in the constructed
+negative control.
+
 ## Isolation: what is actually enforced
 
 Three layers (`runner/isolation.py`):
